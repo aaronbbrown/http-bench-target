@@ -18,7 +18,17 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
-		iterations := 100000
+		iterstr := r.URL.Query().Get("iterations")
+		if len(iterstr) < 1 {
+			iterstr = "100000"
+		}
+
+		iterations, err := strconv.Atoi(iterstr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		for i := 1; i < iterations; i++ {
 			_, err := crand.Int(crand.Reader, big.NewInt(27))
 			if err != nil {
