@@ -39,6 +39,10 @@ func main() {
 		io.WriteString(w, "Generated "+strconv.Itoa(iterations)+" random strings")
 	})
 
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "OK")
+	})
+
 	n := negroni.Classic()
 	n.UseHandler(mux)
 
