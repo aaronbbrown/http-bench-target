@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,19 +51,13 @@ func NewCPUProfileConfigFromRequest(r *http.Request) (CPUProfileConfig, error) {
 	return profile, nil
 }
 
-func thread_cpu_usage() time.Duration {
-	r := syscall.Rusage{}
-	syscall.Getrusage(syscall.RUSAGE_SELF, &r)
-	return time.Duration(r.Stime.Nano() + r.Utime.Nano())
-}
-
 func main() {
+	var wg sync.WaitGroup
 	fmt.Printf("GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
-		cpustart := thread_cpu_usage()
-
 		profile, err := NewCPUProfileConfigFromRequest(r)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -77,9 +72,7 @@ func main() {
 		}
 
 		time.Sleep(profile.Sleep)
-		cpuend := thread_cpu_usage()
-		fmt.Fprintf(w, "iterations=%d cputime=%d\n", profile.Iterations, cpuend.Nanoseconds()-cpustart.Nanoseconds())
-
+		fmt.Fprintf(w, "iterations=%d\n", profile.Iterations)
 	})
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +84,9 @@ func main() {
 
 	srv := &http.Server{Addr: ":9090", Handler: n}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := srv.ListenAndServe(); err != nil {
 			// cannot panic, because this probably is an intentional close
 			log.Printf("Httpserver: ListenAndServe() error: %s", err)
@@ -107,6 +102,7 @@ func main() {
 	if err := srv.Shutdown(nil); err != nil {
 		log.Fatal(err) // failure/timeout shutting down the server gracefully
 	}
+	wg.Wait()
 
 	log.Println("main: done. exiting")
 }
