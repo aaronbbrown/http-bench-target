@@ -1,11 +1,9 @@
 package main
 
 import (
-	crand "crypto/rand"
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	negronilogrus "github.com/meatballhat/negroni-logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
 )
 
@@ -27,7 +27,7 @@ func NewCPUProfileConfigFromRequest(r *http.Request) (CPUProfileConfig, error) {
 	var profile CPUProfileConfig
 	iterstr := r.URL.Query().Get("iterations")
 	if len(iterstr) < 1 {
-		iterstr = "100000"
+		iterstr = "1000"
 	}
 
 	iterations, err := strconv.Atoi(iterstr)
@@ -64,10 +64,8 @@ func main() {
 		}
 
 		for i := 1; i < profile.Iterations; i++ {
-			_, err := crand.Int(crand.Reader, big.NewInt(27))
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+			if i%1000 == 0 {
+				runtime.Gosched()
 			}
 		}
 
@@ -79,7 +77,13 @@ func main() {
 		io.WriteString(w, "OK")
 	})
 
-	n := negroni.Classic()
+	formatter := &logrus.TextFormatter{
+		DisableColors: true,
+		FullTimestamp: true,
+	}
+	logger := negronilogrus.NewCustomMiddleware(logrus.InfoLevel, formatter, "web")
+	n := negroni.New(negroni.NewRecovery(), logger)
+
 	n.UseHandler(mux)
 
 	srv := &http.Server{Addr: ":9090", Handler: n}
