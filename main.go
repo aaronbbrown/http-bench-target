@@ -14,8 +14,10 @@ import (
 	"time"
 
 	negronilogrus "github.com/meatballhat/negroni-logrus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
+	negroniprometheus "github.com/zbindenren/negroni-prometheus"
 )
 
 type CPUProfileConfig struct {
@@ -55,6 +57,7 @@ func main() {
 	var wg sync.WaitGroup
 	fmt.Printf("GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
 
+	nprom := negroniprometheus.NewMiddleware("http-bench-target")
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
@@ -77,12 +80,16 @@ func main() {
 		io.WriteString(w, "OK")
 	})
 
+	mux.Handle("/metrics", promhttp.Handler())
+
 	formatter := &logrus.TextFormatter{
 		DisableColors: true,
 		FullTimestamp: true,
 	}
 	logger := negronilogrus.NewCustomMiddleware(logrus.InfoLevel, formatter, "web")
-	n := negroni.New(negroni.NewRecovery(), logger)
+	queue := NewLimitedQueueMiddleware(16)
+
+	n := negroni.New(negroni.NewRecovery(), logger, nprom, queue)
 
 	n.UseHandler(mux)
 
