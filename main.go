@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -55,6 +56,13 @@ func NewCPUProfileConfigFromRequest(r *http.Request) (CPUProfileConfig, error) {
 
 func main() {
 	var wg sync.WaitGroup
+	var workers uint
+	var latencyFn string
+
+	flag.UintVar(&workers, "simulated-workers", 0, "simulated number of http workers to artificially queue requests. 0 disables.")
+	flag.StringVar(&latencyFn, "latency-filename", "",
+		"filename containing latencies (one per line, in ms) to artificially delay requests via GET /latency")
+	flag.Parse()
 	fmt.Printf("GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
 
 	nprom := negroniprometheus.NewMiddleware("http-bench-target")
@@ -82,14 +90,26 @@ func main() {
 
 	mux.Handle("/metrics", promhttp.Handler())
 
+	if latencyFn != "" {
+		lg, err := NewLatencyGeneratorFromFile(latencyFn)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		mux.Handle("/latency", lg)
+	}
+
 	formatter := &logrus.TextFormatter{
 		DisableColors: true,
 		FullTimestamp: true,
 	}
 	logger := negronilogrus.NewCustomMiddleware(logrus.InfoLevel, formatter, "web")
-	queue := NewLimitedQueueMiddleware(16)
+	n := negroni.New(negroni.NewRecovery(), logger, nprom)
 
-	n := negroni.New(negroni.NewRecovery(), logger, nprom, queue)
+	if workers > 0 {
+		queue := NewLimitedQueueMiddleware(workers)
+		n.Use(queue)
+	}
 
 	n.UseHandler(mux)
 
