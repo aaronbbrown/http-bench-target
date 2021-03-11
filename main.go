@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -14,8 +15,10 @@ import (
 	"time"
 
 	negronilogrus "github.com/meatballhat/negroni-logrus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
+	negroniprometheus "github.com/zbindenren/negroni-prometheus"
 )
 
 type CPUProfileConfig struct {
@@ -53,8 +56,16 @@ func NewCPUProfileConfigFromRequest(r *http.Request) (CPUProfileConfig, error) {
 
 func main() {
 	var wg sync.WaitGroup
+	var workers uint
+	var latencyFn string
+
+	flag.UintVar(&workers, "simulated-workers", 0, "simulated number of http workers to artificially queue requests. 0 disables.")
+	flag.StringVar(&latencyFn, "latency-filename", "",
+		"filename containing latencies (one per line, in ms) to artificially delay requests via GET /latency")
+	flag.Parse()
 	fmt.Printf("GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
 
+	nprom := negroniprometheus.NewMiddleware("http-bench-target")
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
@@ -77,12 +88,28 @@ func main() {
 		io.WriteString(w, "OK")
 	})
 
+	mux.Handle("/metrics", promhttp.Handler())
+
+	if latencyFn != "" {
+		lg, err := NewLatencyGeneratorFromFile(latencyFn)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		mux.Handle("/latency", lg)
+	}
+
 	formatter := &logrus.TextFormatter{
 		DisableColors: true,
 		FullTimestamp: true,
 	}
 	logger := negronilogrus.NewCustomMiddleware(logrus.InfoLevel, formatter, "web")
-	n := negroni.New(negroni.NewRecovery(), logger)
+	n := negroni.New(negroni.NewRecovery(), logger, nprom)
+
+	if workers > 0 {
+		queue := NewLimitedQueueMiddleware(workers)
+		n.Use(queue)
+	}
 
 	n.UseHandler(mux)
 
