@@ -30,6 +30,7 @@ func (m *LimitedQueueMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Reque
 		m.acceptC <- true
 		// measure how long we spent in the queue
 		tiq := timer.ObserveDuration()
+		rw.Header().Set("time-in-queue", tiq.String())
 		log.Println("time in queue:", tiq)
 	}
 
