@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/aaronbbrown/http-bench-target/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,8 +31,8 @@ func (m *LimitedQueueMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Reque
 		m.acceptC <- true
 		// measure how long we spent in the queue
 		tiq := timer.ObserveDuration()
-		rw.Header().Set("time-in-queue", tiq.String())
-		log.Println("time in queue:", tiq)
+		rw.Header().Set("time-in-queue-ms", strconv.FormatInt(tiq.Milliseconds(), 10))
+		log.Printf("time in queue: %d ms", tiq.Milliseconds())
 	}
 
 	next(rw, r)
