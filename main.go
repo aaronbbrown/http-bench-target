@@ -100,9 +100,12 @@ func main() {
 	}
 
 	formatter := &logrus.TextFormatter{
-		DisableColors: true,
-		FullTimestamp: true,
+		DisableColors:   true,
+		FullTimestamp:   true,
+		TimestampFormat: time.RFC3339Nano,
 	}
+	logrus.SetFormatter(formatter)
+	logrus.SetOutput(os.Stdout)
 	logger := negronilogrus.NewCustomMiddleware(logrus.InfoLevel, formatter, "web")
 	n := negroni.New(negroni.NewRecovery(), logger, nprom)
 

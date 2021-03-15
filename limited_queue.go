@@ -1,12 +1,12 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/aaronbbrown/http-bench-target/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 // LimitedQueueMiddlware holds requests until there's less than workers active
@@ -24,16 +24,18 @@ func NewLimitedQueueMiddleware(workers uint) *LimitedQueueMiddleware {
 	}
 }
 
-func (m *LimitedQueueMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+func (m *LimitedQueueMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	if m.workers > 0 {
 		defer func() { <-m.acceptC }()
 		timer := prometheus.NewTimer(metrics.QueueDurationSecs().WithLabelValues())
 		m.acceptC <- true
 		// measure how long we spent in the queue
 		tiq := timer.ObserveDuration()
-		rw.Header().Set("time-in-queue-ms", strconv.FormatInt(tiq.Milliseconds(), 10))
-		log.Printf("time in queue: %d ms", tiq.Milliseconds())
+		logrus.WithFields(
+			logrus.Fields{"milliseconds": tiq.Milliseconds()},
+		).Info("time in queue")
+		w.Header().Set("time-in-queue-ms", strconv.FormatInt(tiq.Milliseconds(), 10))
 	}
 
-	next(rw, r)
+	next(w, r)
 }
