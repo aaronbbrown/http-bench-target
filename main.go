@@ -68,6 +68,14 @@ func main() {
 	nprom := negroniprometheus.NewMiddleware("http-bench-target")
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/environment", func(w http.ResponseWriter, r *http.Request) {
+		for _, env := range os.Environ() {
+			fmt.Fprintf(w, "%s\n", env)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
 		profile, err := NewCPUProfileConfigFromRequest(r)
 		if err != nil {
