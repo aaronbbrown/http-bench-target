@@ -72,8 +72,6 @@ func main() {
 		for _, env := range os.Environ() {
 			fmt.Fprintf(w, "%s\n", env)
 		}
-
-		w.WriteHeader(http.StatusOK)
 	})
 
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
