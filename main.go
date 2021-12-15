@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -54,6 +56,17 @@ func NewCPUProfileConfigFromRequest(r *http.Request) (CPUProfileConfig, error) {
 	return profile, nil
 }
 
+func envToMap(env []string) map[string]string {
+	m := make(map[string]string)
+
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		m[parts[0]] = parts[1]
+	}
+
+	return m
+}
+
 func main() {
 	var wg sync.WaitGroup
 	var workers uint
@@ -69,9 +82,21 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/environment", func(w http.ResponseWriter, r *http.Request) {
-		for _, env := range os.Environ() {
-			fmt.Fprintf(w, "%s\n", env)
+		resp := struct {
+			Environment    map[string]string `json:"environment,omiempty"`
+			RequestHeaders http.Header       `json:"request_headers,omitempty"`
+		}{
+			Environment:    envToMap(os.Environ()),
+			RequestHeaders: r.Header,
 		}
+
+		b, err := json.Marshal(resp)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Fprint(w, string(b))
 	})
 
 	mux.HandleFunc("/cpu", func(w http.ResponseWriter, r *http.Request) {
