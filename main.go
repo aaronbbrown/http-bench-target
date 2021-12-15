@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -152,9 +153,9 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := srv.ListenAndServe(); err != nil {
-			// cannot panic, because this probably is an intentional close
-			log.Printf("Httpserver: ListenAndServe() error: %s", err)
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			// ListenAndServe() always returns an error
+			log.Fatalf("Httpserver: ListenAndServe() error: %v", err)
 		}
 	}()
 
@@ -162,9 +163,9 @@ func main() {
 	signal.Notify(sigC, syscall.SIGINT, syscall.SIGTERM)
 	<-sigC
 
-	// now close the server gracefully ("shutdown")
-	// timeout could be given instead of nil as a https://golang.org/pkg/context/
-	if err := srv.Shutdown(nil); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal(err) // failure/timeout shutting down the server gracefully
 	}
 	wg.Wait()
