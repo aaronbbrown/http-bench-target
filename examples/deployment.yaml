@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    github.com/opt-out-resource-quotas: "true"
+    github.com/no-limit-soldier: "true"
+  name: http-bench-target
+# ---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: http-bench-target-config
+#   namespace: http-bench-target
+# data:
+#   latencies.txt: |
+#     100
+#     200
+#     300
+#     500
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-bench-target
+  namespace: http-bench-target
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: http-bench-target
+  template:
+    metadata:
+      labels:
+        app: http-bench-target
+    spec:
+      containers:
+      - name: http-bench-target
+        image: aaronbbrown/http-bench-target:latest
+        command:
+        - /usr/local/bin/http-bench-target
+        - -simulated-workers=16
+        - -latency-filename=/etc/http-bench-target/latencies.txt
+        env:
+        - name: GOMAXPROCS
+          value: "2"
+        volumeMounts:
+        - name: http-bench-target-config
+          mountPath: /etc/http-bench-target
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "0.1"
+          limits:
+            memory: "512Mi"
+            cpu: 8
+        ports:
+        - containerPort: 9090
+          name: http
+        imagePullPolicy: Always
+      volumes:
+      - name: http-bench-target-config
+        configMap:
+          name: http-bench-target-config
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-bench-target
+  namespace: http-bench-target
+spec:
+  selector:
+    app: http-bench-target
+  type: NodePort
+  ports:
+  - port: 9090
+    targetPort: http
+
+---
