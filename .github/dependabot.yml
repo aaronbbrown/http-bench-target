@@ -1,0 +1,18 @@
+---
+version: 2
+updates:
+- package-ecosystem: docker
+  directory: "/"
+  schedule:
+    interval: weekly
+  groups:
+    docker:
+      update-types: [minor, patch, major]
+
+- package-ecosystem: gomod
+  directory: "/"
+  schedule:
+    interval: weekly
+  groups:
+    gomod:
+      update-types: [major, minor, patch]
