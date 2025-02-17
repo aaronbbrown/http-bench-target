@@ -1,4 +1,4 @@
-FROM golang:1.23-bookworm as builder
+FROM golang:1.24-bookworm as builder
 WORKDIR /go/src/app
 COPY . .
 RUN go build -o /usr/local/bin/http-bench-target
